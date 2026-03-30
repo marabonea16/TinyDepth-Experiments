@@ -159,3 +159,23 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+
+# Trained models & checkpoints
+models/
+
+# KITTI dataset
+2011_09_26/
+2011_09_28/
+2011_09_29/
+2011_09_30/
+2011_10_03/
+
+# Wandb logs (stored on wandb.ai)
+wandb/
+
+# VS Code
+.vscode/
+
+# Misc
+.codex
+splits/eigen/gt_depths.npz

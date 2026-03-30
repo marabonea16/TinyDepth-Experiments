@@ -10,13 +10,13 @@
 from .tiny_vit import TinyViT
 
 
-def build_model(config):
+def build_model(config, img_width=640, img_height=192, use_checkpoint=False):
     model_type = config.MODEL.TYPE
     if model_type == 'tiny_vit':
         M = config.MODEL.TINY_VIT
         model = TinyViT(
-                        img_width=640,
-                        img_height=192,
+                        img_width=img_width,
+                        img_height=img_height,
                         in_chans=M.IN_CHANS,
                         embed_dims=M.EMBED_DIMS,
                         depths=M.DEPTHS,
@@ -25,7 +25,7 @@ def build_model(config):
                         mlp_ratio=M.MLP_RATIO,
                         drop_rate=config.MODEL.DROP_RATE,
                         drop_path_rate=config.MODEL.DROP_PATH_RATE,
-                        use_checkpoint=False,
+                        use_checkpoint=use_checkpoint,
                         mbconv_expand_ratio=M.MBCONV_EXPAND_RATIO,
                         local_conv_size=M.LOCAL_CONV_SIZE,
                         layer_lr_decay=config.TRAIN.LAYER_LR_DECAY,
@@ -36,4 +36,3 @@ def build_model(config):
         raise NotImplementedError(f"Unkown model: {model_type}")
 
     return model
-

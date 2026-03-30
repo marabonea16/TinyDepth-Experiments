@@ -98,7 +98,7 @@ def evaluate(opt):
                                 pin_memory=True, drop_last=False)
 
 
-        encoder = networks.build_model(config)
+        encoder = networks.build_model(config, img_width=opt.width, img_height=opt.height)
         
 
         depth_decoder = networks.FusionDecoder(num_ch_enc)
@@ -254,4 +254,3 @@ def evaluate(opt):
 if __name__ == "__main__":
     options = MonodepthOptions()
     evaluate(options.parse())
-

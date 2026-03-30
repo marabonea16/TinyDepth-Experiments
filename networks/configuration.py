@@ -52,7 +52,10 @@ _C.MODEL.TYPE = 'tiny_vit'
 _C.MODEL.NAME = 'tiny_vit'
 # Pretrained weight from checkpoint, could be imagenet22k pretrained weight
 # could be overwritten by command line argument
-_C.MODEL.PRETRAINED = '/home/ace/workspace/TinyDepth/networks/tiny_vit_5m_22k_distill_depth.pth'
+_C.MODEL.PRETRAINED = os.path.join(
+    os.path.dirname(__file__),
+    'tiny_vit_5m_22k_distill_depth.pth'
+)
 # Checkpoint to resume, could be overwritten by command line argument
 _C.MODEL.RESUME = ''
 # Dropout rate

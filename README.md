@@ -36,6 +36,14 @@ Please consider citing it if you think it is a useful work.
 CUDA_VISIBLE_DEVICES=0 python train.py --model_name Tiny-Depth --scales 0 --png --log_dir models --data_path /datasets/Kitti_raw_data
 ```
 
+## Training + Weights & Biases:
+
+```
+pip install wandb
+wandb login
+CUDA_VISIBLE_DEVICES=0 python train.py --model_name Tiny-Depth --scales 0 --png --log_dir models --data_path /datasets/Kitti_raw_data --use_wandb --wandb_project tinydepth --wandb_run_name tinydepth-repro
+```
+
 
 ## Testing:
 

@@ -88,6 +88,7 @@ class FusionDecoder(nn.Module):
 
 
         self.convs[("dispconv", 0)] = Conv3x3(64, self.num_output_channels)
+        self.convs[("uncertconv", 0)] = Conv3x3(64, self.num_output_channels)
 
 
 
@@ -171,6 +172,7 @@ class FusionDecoder(nn.Module):
 
 
         self.outputs[("disp", 0)] = self.sigmoid(self.convs[("dispconv", 0)](d))
+        self.outputs[("uncert", 0)] = self.convs[("uncertconv", 0)](d)  # log-variance (raw, no activation)
 
 
         return self.outputs

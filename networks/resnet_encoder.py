@@ -15,6 +15,35 @@ import torchvision.models as models
 import torch.utils.model_zoo as model_zoo
 
 
+def _load_resnet_imagenet_weights(num_layers):
+    """Load ResNet ImageNet weights across old/new torchvision APIs."""
+    try:
+        weights_enum = getattr(models, "ResNet{}_Weights".format(num_layers))
+        return weights_enum.DEFAULT.get_state_dict(progress=True)
+    except Exception:
+        return model_zoo.load_url(models.resnet.model_urls['resnet{}'.format(num_layers)])
+
+
+def _build_resnet(num_layers, pretrained):
+    """Build ResNet across old/new torchvision APIs."""
+    resnets = {18: models.resnet18,
+               34: models.resnet34,
+               50: models.resnet50,
+               101: models.resnet101,
+               152: models.resnet152}
+    ctor = resnets[num_layers]
+    if not pretrained:
+        try:
+            return ctor(weights=None)
+        except TypeError:
+            return ctor(False)
+    try:
+        weights_enum = getattr(models, "ResNet{}_Weights".format(num_layers))
+        return ctor(weights=weights_enum.DEFAULT)
+    except Exception:
+        return ctor(True)
+
+
 
 class ResNetMultiImageInput(models.ResNet):
     """Constructs a resnet model with varying number of input images.
@@ -56,7 +85,7 @@ def resnet_multiimage_input(num_layers, pretrained=False, num_input_images=1):
     #若设置预训练，则通过model_zoo.py中的load_url函数根据model_urls字典下载或导入相应的预训练模型；
     #最后通过调用model的load_state_dict方法用预训练的模型参数来初始化你构建的网络结构
     if pretrained:
-        loaded = model_zoo.load_url(models.resnet.model_urls['resnet{}'.format(num_layers)])
+        loaded = _load_resnet_imagenet_weights(num_layers)
         loaded['conv1.weight'] = torch.cat(
             [loaded['conv1.weight']] * num_input_images, 1) / num_input_images
         model.load_state_dict(loaded)
@@ -83,7 +112,7 @@ class ResnetEncoder(nn.Module):
         if num_input_images > 1:
             self.encoder = resnet_multiimage_input(num_layers, pretrained, num_input_images)
         else:
-            self.encoder = resnets[num_layers](pretrained)
+            self.encoder = _build_resnet(num_layers, pretrained)
 
         if num_layers > 34:
             self.num_ch_enc[1:] *= 4       #[64, 256, 512, 1024, 2048]

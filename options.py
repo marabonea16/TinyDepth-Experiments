@@ -123,6 +123,16 @@ class MonodepthOptions:
                                  type=float,
                                  help="learning rate",
                                  default=1e-4)
+        self.parser.add_argument("--use_amp",
+                                 help="if set, enables mixed precision training with torch.cuda.amp",
+                                 action="store_true")
+        self.parser.add_argument("--accum_steps",
+                                 type=int,
+                                 help="number of gradient accumulation steps",
+                                 default=1)
+        self.parser.add_argument("--use_activation_checkpoint",
+                                 help="if set, enables activation checkpointing in TinyViT blocks",
+                                 action="store_true")
         self.parser.add_argument("--num_epochs",
                                  type=int,
                                  help="number of epochs",
@@ -192,6 +202,25 @@ class MonodepthOptions:
                                  type=int,
                                  help="number of epochs between each save",
                                  default=1)
+        self.parser.add_argument("--start_epoch",
+                                 type=int,
+                                 help="epoch to resume training from (use with --load_weights_folder)",
+                                 default=0)
+        self.parser.add_argument("--use_wandb",
+                                 help="if set, log training metrics to Weights & Biases",
+                                 action="store_true")
+        self.parser.add_argument("--wandb_project",
+                                 type=str,
+                                 help="Weights & Biases project name",
+                                 default="tinydepth")
+        self.parser.add_argument("--wandb_entity",
+                                 type=str,
+                                 help="Weights & Biases entity/team name",
+                                 default=None)
+        self.parser.add_argument("--wandb_run_name",
+                                 type=str,
+                                 help="Weights & Biases run name",
+                                 default=None)
 
         # EVALUATION options
         self.parser.add_argument("--eval_stereo",
@@ -239,8 +268,6 @@ class MonodepthOptions:
     def parse(self):
         self.options = self.parser.parse_args()
         return self.options
-
-
 
 
 
