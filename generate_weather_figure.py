@@ -35,9 +35,9 @@ ROWS = [
     ("Inghet (frost)", apply_frost_like),
 ]
 
-LABEL_W = 220       # latime banda de eticheta randuri (stanga)
+LABEL_W = 340       # latime banda de eticheta randuri (stanga)
 HEADER_H = 50        # inaltime banda de eticheta coloane (sus)
-FONT_SIZE = 22
+FONT_SIZE = 20
 
 
 def get_font(size):
