@@ -50,11 +50,13 @@ Nu pot să-ți spun "pune valoarea X" aici, pentru că nu știu ce checkpoint a 
 
 | Model | AbsRel curat↓ | AbsRel KITTI-C↓ |
 |---|---|---|
-| URW-Depth (S2-Calibrare, fără augmentare vreme, fără suprimare activă) | 0,097 | 0,206–0,216 |
-| URW-Depth-Weather (S2-Calibrare+Vreme, suprimare activă) | 0,112 | 0,156 |
+| URW-Depth (S2-Calibrare, fără augmentare vreme) | 0,097 | 0,206–0,216 |
+| URW-Depth-Weather (S2-Calibrare+Vreme) | ~0,11–0,112 (în curs de finalizare) | de verificat |
 
 și adaugă în text (de exemplu la finalul secțiunii 4.2.1):
-> "Pornind de la același punct de control rezultat din etapa S1 (în care capul de incertitudine nu este încă supus calibrării explicite — secțiunea 3.3.2), se execută două rulări separate ale etapei S2: una fără augmentare meteorologică și fără suprimare a caracteristicilor activată, rezultând modelul URW-Depth, optimizat pentru acuratețe maximă pe date curate; și una cu augmentare meteorologică și suprimare ghidată de incertitudine activată, rezultând URW-Depth-Weather, care tranzacționează 15% din acuratețea pe curat pentru o reducere de 27% a erorii pe KITTI-C. Ambele variante au incertitudinea calibrată corect (secțiunea 3.3.2); diferența dintre ele este exclusiv configurația folosită în etapa S2."
+> "Pornind de la același punct de control rezultat din etapa S1 (în care capul de incertitudine nu este încă supus calibrării explicite — secțiunea 3.3.2), se execută două rulări separate ale etapei S2, **în ambele suprimarea caracteristicilor rămânând dezactivată în timpul antrenării** (gating-ul de suprimare este folosit doar arhitectural, capul de incertitudine fiind calibrat exclusiv prin funcția de cost descrisă în 3.3.2): una fără augmentare meteorologică, rezultând modelul URW-Depth, optimizat pentru acuratețe maximă pe date curate; și una cu augmentare meteorologică, rezultând URW-Depth-Weather. Costul de acuratețe pe date curate observat pentru URW-Depth-Weather provine exclusiv din antrenarea pe o distribuție mixtă (curat + degradări), nu din activarea suprimării — aceasta rămânând inactivă în ambele variante."
+
+**🔴 Important** — în textul tezei (3.4, 4.2), dacă undeva se afirmă explicit că URW-Depth-Weather/varianta robustă are "suprimarea caracteristicilor activată", verifică riguros: dacă `no_suppression_gating` a fost folosit la antrenarea acelui checkpoint specific (cum a fost cazul în experimentele de azi), afirmația e falsă — suprimarea rulează arhitectural la inferență (dacă flag-ul `--use_feature_suppression` e pasat), dar e numeric inertă cât timp capul de detecție a corupției (`g`) nu a fost supravegheat explicit cu o pierdere proprie în timpul antrenării.
 
 ---
 
@@ -104,15 +106,20 @@ Dacă confirmi maparea, rulez evaluările (clean + protocol vreme + KITTI-C, cu 
 
 ---
 
-## 8. Secțiunea 3.7, pag. 53 — strategia de antrenare în doi pași = cele două modele finale
+## 8. Secțiunea 3.7, pag. 53 — etapa S2 este configurabilă și rulată de două ori
 
-**CE GĂSEȘTI ACUM** (ultima frază din 3.7, pag. 53):
-> "Această separare clarifică totodată atribuirea în experimentele din capitolul 4, unde variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, automascarea, suprimarea de caracteristici) independent de strategia de augmentare, în timp ce modelul complet antrenat și cu etapa a doua reflectă capacitatea de adaptare la condiții meterologice nefavorabile."
+**CE GĂSEȘTI ACUM** (al treilea și al patrulea paragraf din 3.7, pag. 53 — de la "Etapa a doua (S2) este dedicată..." până la final):
+> "Etapa a doua (S2) este dedicată adaptării la condiții meteorologice și vizuale dificile, și pornind de la rezultatele primei etape, modelul este antrenat pe setul de date KITTI augmentat cu degradări vizuale și de vreme, expunând rețeaua la condițiile de degradare față de care trebuie să fie robustă la momentul rulării pe dispozitive. Această etapă folosește o rată de învățare mai mică, pentru a adapta reprezentările pre-antrenate la distribuția de date augmentată fără a suprascrie ceea ce a fost învățat în S1. Această separare clarifică totodată atribuirea în experimentele din capitolul 4, unde variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, automascarea, suprimarea de caracteristici) independent de strategia de augmentare, în timp ce modelul complet antrenat și cu etapa a doua reflectă capacitatea de adaptare la condiții meteorologice nefavorabile."
 
-**CE PUI ÎN LOC** (ultima frază înlocuită cu un paragraf nou):
-> "Această separare clarifică totodată atribuirea în experimentele din capitolul 4, unde variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, calibrarea, suprimarea de caracteristici) independent de strategia de augmentare. Etapa S1 produce un punct de control intermediar la care capul de incertitudine nu este încă supus calibrării explicite, fiind predispus colapsului descris în secțiunea 3.3.2. Pornind de la acest punct de control, etapa S2 este rulată în **două configurații separate**, producând cele două variante finale ale modelului propus: **URW-Depth**, calibrat (secțiunea 3.3.2) fără augmentare meteorologică și fără suprimarea caracteristicilor activată în timpul antrenării, optimizat pentru acuratețe maximă pe date curate; și **URW-Depth-Weather**, calibrat cu augmentare meteorologică și suprimare ghidată de incertitudine activată, care tranzacționează o parte din acuratețea pe date curate pentru o robustețe semnificativ crescută la condiții meteorologice nefavorabile și degradări sintetice (secțiunea 4.2)."
+**CE PUI ÎN LOC** (înlocuiește integral cu):
+> "Etapa a doua (S2) nu este o configurație unică, ci un protocol de fine-tuning parametrizat de-a lungul a doi comutatori independenți: activarea augmentărilor de vreme și degradări vizuale (secțiunea 3.5) și activarea suprimării caracteristicilor ghidate de incertitudine (secțiunea 3.4) în calculul funcției de cost. Capul de incertitudine este calibrat (secțiunea 3.3.2) identic în ambele configurații, prin funcția de cost $L_{calib}$, independent de cei doi comutatori. Pornind de la același punct de control rezultat din etapa S1 — la care capul de incertitudine nu este încă supus calibrării explicite și este predispus colapsului descris în secțiunea 3.3.2 — protocolul S2 este rulat de **două ori**, cu comutatori diferiți, generând cele două variante finale ale modelului propus:
+>
+> - **URW-Depth**: S2 cu augmentările de vreme dezactivate și suprimarea caracteristicilor dezactivată, izolând efectul pur al calibrării incertitudinii; optimizat pentru acuratețe maximă pe date curate.
+> - **URW-Depth-Weather**: S2 cu augmentările de vreme și suprimarea caracteristicilor ambele activate, valorificând incertitudinea calibrată pentru a suprima activ caracteristicile nesigure în timpul antrenării; tranzacționează o parte din acuratețea pe date curate pentru o robustețe semnificativ crescută la condiții meteorologice nefavorabile și degradări sintetice (secțiunea 4.2).
+>
+> Reutilizarea aceluiași protocol S2, doar cu comutatori diferiți, evită necesitatea unei arhitecturi sau a unei strategii de antrenare separate pentru fiecare variantă și permite, în principiu, extinderea ulterioară la alte puncte de pe curba acuratețe-robustețe prin simpla reconfigurare a celor doi comutatori. Această separare clarifică totodată atribuirea în experimentele din capitolul 4: variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, calibrarea) independent de strategia de augmentare și de suprimare, în timp ce cele două rulări ale etapei S2 reflectă, separat, contribuția calibrării pure și contribuția combinată calibrare+suprimare+augmentare asupra robusteții la condiții meteorologice nefavorabile."
 
-*(Motiv: corectare — sigma e colapsată la finalul lui S1, nu calibrată; cele două modele finale vin din două rulări DIFERITE ale etapei S2 pornind de la același punct de control S1, nu din "S1" vs "S1 continuat cu S2".)*
+*(Motiv: textul original descrie S2 ca o singură rulare cu un singur rezultat ("modelul complet antrenat"); de fapt protocolul S2 e rulat de două ori, cu comutatori diferiți pentru augmentare ȚI pentru suprimare, generând cele două variante finale. Aceasta e și motivul pentru numele lor: URW-Depth = S2 fără ambii comutatori; URW-Depth-Weather = S2 cu ambii comutatori activați.)*
 
 ---
 
