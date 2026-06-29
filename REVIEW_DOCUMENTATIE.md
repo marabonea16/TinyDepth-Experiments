@@ -84,7 +84,27 @@ Dacă confirmi maparea, rulez evaluările (clean + protocol vreme + KITTI-C, cu 
 
 ---
 
-## 7. Declarația de autenticitate (ultima pagină) — de completat manual
+## 7. Secțiunea 3.5.1, pag. 50 — augmentări meteorologice extinse de la 3 la 6 tipuri
+
+**CE GĂSEȘTI ACUM** (primul paragraf din 3.5.1):
+> "Cand augmentările meteorologice sunt active, fiecare imagine de la antrenare este independent și aleator perturbată cu una dintre cele trei efecte aplicate la severități aleatoare în intervalul [0,1]."
+
+**CE PUI ÎN LOC:**
+> "Când augmentările meteorologice sunt active, fiecare imagine de la antrenare este independent și aleator perturbată cu unul dintre șase efecte aplicate la severități aleatoare în intervalul [0,1]: trei corespunzând fenomenelor meteorologice propriu-zise (ceață, ploaie, ninsoare) și trei corespunzând unor degradări globale de culoare/contrast (contrast redus, luminozitate crescută, înghețare/"frost"), introduse pentru a alinia statistic distribuția de antrenare cu corupțiile reale din KITTI-C, ale căror semnături de medie și deviație standard per canal diferă semnificativ de cele produse de augmentările meteorologice simple (verificat empiric: shift de medie ~67 pentru ceața simulată inițial vs. magnitudini diferite pentru frost/contrast/brightness din KITTI-C real)."
+
+**CE ADAUGI** — după paragrafele despre ceață/ploaie/ninsoare (înainte de "Aceste augmentări sunt aplicate aproape identic..."), trei paragrafe noi:
+
+> "Pentru efectul de contrast redus se calculează media per canal a imaginii și se reduce abaterea fiecărui pixel față de această medie cu un factor proporțional cu severitatea ($severity \in [0.4, 0.85]$), păstrând media globală practic neschimbată, dar reducând deviația standard per canal — efect verificat empiric ca fiind reprezentativ pentru corupția "contrast" din KITTI-C (deviația standard scade de la aproximativ 84 la aproximativ 17 pe canal, media rămânând neschimbată).
+>
+> Pentru efectul de luminozitate crescută se aplică o combinație de scalare și deplasare aditivă către alb, cu severitate în $[0.3, 0.6]$, simulând o creștere a mediei per canal de 50–60 unități cu o reducere moderată a contrastului, reprezentativă pentru corupția "brightness" din KITTI-C.
+>
+> Pentru efectul de înghețare ("frost") se aplică un amestec aditiv cu o culoare alb-albăstruie (R=200, G=210, B=220), cu severitate în $[0.4, 0.8]$, producând o creștere mare a mediei per canal (aproximativ 80–90 unități), reprezentativă pentru corupția "frost" din KITTI-C."
+
+*(Motiv: am verificat azi empiric, comparând imagini reale din `kitti_c/kitti_c/{fog,snow,frost,brightness,contrast}`, că augmentările meteorologice originale — fog/rain/snow — produc un profil statistic de medie/std diferit de corupțiile reale KITTI-C, ceea ce cauza o generalizare slabă a modelului antrenat doar pe ele. Cele trei funcții noi sunt calibrate direct pe statisticile reale măsurate.)*
+
+---
+
+## 8. Declarația de autenticitate (ultima pagină) — de completat manual
 
 **CE COMPLETEZI** la rândul "În elaborarea lucrării":
 > bifează **"am utilizat"**, denumire: **Claude (Anthropic)**, sursa: **Claude Code / API Anthropic**.
