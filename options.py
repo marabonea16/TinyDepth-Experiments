@@ -235,6 +235,27 @@ class MonodepthOptions:
                                  type=float,
                                  help="weight for MSE uncertainty calibration loss",
                                  default=1.0)
+        self.parser.add_argument("--seed",
+                                 type=int,
+                                 help="random seed for reproducibility (python/numpy/torch/dataloader workers)",
+                                 default=42)
+        self.parser.add_argument("--corrupt_head_lr",
+                                 type=float,
+                                 help="learning rate for the corruption-detector head's own "
+                                      "optimizer param group (separate from --learning_rate, "
+                                      "since it's a small MLP trained from scratch)",
+                                 default=1e-3)
+        self.parser.add_argument("--corrupt_head_weight",
+                                 type=float,
+                                 help="weight for global corruption-detector head BCE loss "
+                                      "(gates feature suppression: active only on images "
+                                      "the head predicts as augmented/corrupted)",
+                                 default=1.0)
+        self.parser.add_argument("--no_suppression_gating",
+                                 help="compute sigma (calibrated) but do NOT use it to gate dispconv's input; "
+                                      "keeps depth accuracy unaffected by feature suppression, sigma stays "
+                                      "purely diagnostic/interpretable",
+                                 action="store_true")
         self.parser.add_argument("--use_wandb",
                                  help="if set, log training metrics to Weights & Biases",
                                  action="store_true")

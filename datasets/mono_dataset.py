@@ -40,28 +40,40 @@ def apply_fog(img, severity=None):
 
 
 def apply_rain(img, severity=None):
-    """Simuleaza ploaie: streaks diagonale semitransparente + contrast redus."""
+    """Simuleaza ploaie: streaks diagonale semitransparente + contrast redus.
+    Vectorizat cu numpy (fara bucle Python per-pixel) - bucla originala facea
+    pana la ~600*25=15000 operatii Python per imagine, principalul bottleneck
+    de CPU la antrenare (GPU doar 46% utilizat, bound de data loading)."""
     if severity is None:
         severity = random.uniform(0.3, 0.7)
     arr = np.array(img, dtype=np.float32)
     h, w = arr.shape[:2]
     num_streaks = int(severity * 600)
-    for _ in range(num_streaks):
-        x = random.randint(0, w - 1)
-        y = random.randint(0, h - 20)
-        length = random.randint(10, 25)
-        alpha = random.uniform(0.3, 0.6)
-        for k in range(length):
-            yi = min(y + k, h - 1)
-            xi = min(x + k // 3, w - 1)
-            arr[yi, xi] = arr[yi, xi] * (1 - alpha) + 200 * alpha
+    if num_streaks > 0:
+        max_len = 25
+        xs0 = np.random.randint(0, w, num_streaks)
+        ys0 = np.random.randint(0, h - 20, num_streaks)
+        lengths = np.random.randint(10, max_len, num_streaks)
+        alphas = np.random.uniform(0.3, 0.6, num_streaks)
+
+        k = np.arange(max_len)
+        yi = np.clip(ys0[:, None] + k[None, :], 0, h - 1)
+        xi = np.clip(xs0[:, None] + (k[None, :] // 3), 0, w - 1)
+        valid = k[None, :] < lengths[:, None]
+        alpha_grid = np.broadcast_to(alphas[:, None], yi.shape)
+
+        yi_v = yi[valid]
+        xi_v = xi[valid]
+        a_v = alpha_grid[valid]
+        arr[yi_v, xi_v] = arr[yi_v, xi_v] * (1 - a_v[:, None]) + 200 * a_v[:, None]
     # reducere contrast
     arr = arr * (1 - severity * 0.15) + 128 * severity * 0.15
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
 def apply_snow(img, severity=None):
-    """Simuleaza zapada: puncte albe + desaturare + blur usor."""
+    """Simuleaza zapada: puncte albe + desaturare + blur usor. Vectorizat
+    (vezi nota din apply_rain)."""
     if severity is None:
         severity = random.uniform(0.2, 0.5)
     arr = np.array(img, dtype=np.float32)
@@ -74,8 +86,7 @@ def apply_snow(img, severity=None):
     ys = np.random.randint(0, h, num_flakes)
     xs = np.random.randint(0, w, num_flakes)
     alphas = np.random.uniform(0.5, 1.0, num_flakes)
-    for y, x, a in zip(ys, xs, alphas):
-        arr[y, x] = arr[y, x] * (1 - a) + 255 * a
+    arr[ys, xs] = arr[ys, xs] * (1 - alphas[:, None]) + 255 * alphas[:, None]
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
@@ -121,6 +132,39 @@ def apply_shot_noise(img):
     arr = np.array(img, dtype=np.float32) / 255.0
     arr = np.random.poisson(arr / scale) * scale
     return Image.fromarray(np.clip(arr * 255, 0, 255).astype(np.uint8))
+
+
+def apply_contrast(img, severity=None):
+    """Reduce contrastul (std) pastrand media aproape neschimbata - mimica
+    corruptia 'contrast' din KITTI-C (verificat empiric: std scade de la ~84
+    la ~17 pe canal, media practic identica cu cea curata)."""
+    if severity is None:
+        severity = random.uniform(0.4, 0.85)
+    arr = np.array(img, dtype=np.float32)
+    mean = arr.mean(axis=(0, 1), keepdims=True)
+    arr = mean + (arr - mean) * (1 - severity)
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+
+def apply_brightness_shift(img, severity=None):
+    """Creste luminozitatea globala cu reducere usoara de contrast - mimica
+    corruptia 'brightness' din KITTI-C (media +50-60, std redus moderat)."""
+    if severity is None:
+        severity = random.uniform(0.3, 0.6)
+    arr = np.array(img, dtype=np.float32)
+    arr = arr * (1 - severity * 0.3) + 255 * severity * 0.6
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+
+def apply_frost_like(img, severity=None):
+    """Blend catre o culoare alb-albastruie cu contrast redus - mimica
+    corruptia 'frost' din KITTI-C (media creste mult, ~+80-90 per canal)."""
+    if severity is None:
+        severity = random.uniform(0.4, 0.8)
+    arr = np.array(img, dtype=np.float32)
+    frost_color = np.array([200, 210, 220], dtype=np.float32)
+    arr = arr * (1 - severity * 0.6) + frost_color * severity * 0.6
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
 def apply_weather_aug(img):
@@ -361,18 +405,40 @@ class MonoDataset(data.Dataset):
         else:
             side = None
 
+        # corupii cu semnatura globala de culoare/contrast (detectabile din
+        # medie+std per canal) - extinse cu contrast/brightness/frost ca sa
+        # acopere si magnitudinile reale din KITTI-C (verificat empiric: fog
+        # sintetic vs KITTI-C difera in shift de medie/std, cauzand misfire
+        # pe snow/frost/fog reale la Diag14 - antrenat doar pe fog/rain/snow).
+        GLOBAL_WEATHER_FNS = (apply_fog, apply_rain, apply_snow,
+                              apply_contrast, apply_brightness_shift, apply_frost_like)
+
         # augmentare: acelasi tip aplicat consistent la toate frame-urile din secventa
         aug_fn = None
         if self.is_train and self.use_corruption_aug:
             if random.random() > 0.5:
-                choice = random.randint(0, 6)
+                choice = random.randint(0, 9)
                 aug_fn = [apply_fog, apply_rain, apply_snow,
+                          apply_contrast, apply_brightness_shift, apply_frost_like,
                           apply_defocus_blur, apply_motion_blur,
                           apply_gaussian_noise, apply_shot_noise][choice]
         elif self.is_train and self.use_weather_aug and random.random() > 0.5:
-            choice = random.randint(0, 2)
-            aug_fn = [apply_fog, apply_rain, apply_snow][choice]
+            choice = random.randint(0, 5)
+            aug_fn = [apply_fog, apply_rain, apply_snow,
+                      apply_contrast, apply_brightness_shift, apply_frost_like][choice]
         weather_fn = aug_fn  # backward compat
+
+        # eticheta supravegheata: a fost aceasta imagine augmentata (vreme/coruptie)?
+        # folosita pentru capul global de detectie a corupiei (gateaza suprima
+        # de caracteristici doar pe imagini probabil corupte, nu pe cele curate).
+        inputs["is_corrupted"] = torch.tensor(1.0 if weather_fn is not None else 0.0)
+        # eticheta RESTRANSA doar la corupii cu semnatura globala de culoare
+        # (vreme). Blur si zgomot NU schimba media RGB globala (verificat
+        # empiric: shift de medie ~0.02-0.08 pentru blur vs ~67 pentru ceata) -
+        # un cap care citeste doar statistici globale nu le poate distinge de
+        # imagini curate, deci nu trebuie supravegheat sa o faca.
+        inputs["is_weather_corrupted"] = torch.tensor(
+            1.0 if weather_fn in GLOBAL_WEATHER_FNS else 0.0)
 
         for i in self.frame_idxs:
             if i == "s":

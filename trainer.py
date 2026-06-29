@@ -8,6 +8,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+import random
 import time
 
 import torch
@@ -84,7 +85,8 @@ class Trainer:
 
         self.models["depth"] = networks.FusionDecoder(
             self.num_ch_enc,
-            use_feature_suppression=getattr(self.opt, "use_feature_suppression", False))
+            use_feature_suppression=getattr(self.opt, "use_feature_suppression", False),
+            gate_depth_input=not getattr(self.opt, "no_suppression_gating", False))
 
         self.models["depth"].to(self.device)
         self.parameters_to_train += list(self.models["depth"].parameters())
@@ -133,7 +135,20 @@ class Trainer:
             self.models["predictive_mask"].to(self.device)
             self.parameters_to_train += list(self.models["predictive_mask"].parameters())
 
-        self.model_optimizer = optim.Adam(self.parameters_to_train, self.opt.learning_rate)
+        # corruption_head e un MLP mic, antrenat de la zero, izolat (nu primeste
+        # gradient de la nimic altceva) - lr-ul principal (1e-5, calibrat pentru
+        # reteaua mare deja convergenta) e prea mic ca sa-l miste in cateva mii
+        # de pasi. Grup de optimizare separat cu lr mult mai mare, fara sa
+        # afecteze restul retelei (verificat empiric: bias-ul lui s-a miscat cu
+        # doar ~0.01 intr-o epoca intreaga la lr=1e-5).
+        corrupt_head_params = list(self.models["depth"].corruption_head.parameters())
+        corrupt_head_param_ids = {id(p) for p in corrupt_head_params}
+        main_params = [p for p in self.parameters_to_train if id(p) not in corrupt_head_param_ids]
+        corrupt_head_lr = getattr(self.opt, "corrupt_head_lr", self.opt.learning_rate)
+        self.model_optimizer = optim.Adam([
+            {"params": main_params, "lr": self.opt.learning_rate},
+            {"params": corrupt_head_params, "lr": corrupt_head_lr},
+        ])
         self.model_lr_scheduler = optim.lr_scheduler.StepLR(
             self.model_optimizer, self.opt.scheduler_step_size, 0.1)
         # self.model_lr_scheduler = optim.lr_scheduler.MultiStepLR(
@@ -165,15 +180,22 @@ class Trainer:
             self.opt.frame_ids, 4, is_train=True, img_ext=img_ext,
             use_weather_aug=getattr(self.opt, "use_weather_aug", False),
             use_corruption_aug=getattr(self.opt, "use_corruption_aug", False))
+        def _worker_init_fn(worker_id):
+            seed = getattr(self.opt, "seed", 42) + worker_id
+            np.random.seed(seed)
+            random.seed(seed)
+
         self.train_loader = DataLoader(
             train_dataset, self.opt.batch_size, True,
-            num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
+            num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,
+            worker_init_fn=_worker_init_fn)
         val_dataset = self.dataset(
             self.opt.data_path, val_filenames, self.opt.height, self.opt.width,
             self.opt.frame_ids, 4, is_train=False, img_ext=img_ext)
         self.val_loader = DataLoader(
             val_dataset, self.opt.batch_size, True,
-            num_workers=self.opt.num_workers, pin_memory=True, drop_last=True)
+            num_workers=self.opt.num_workers, pin_memory=True, drop_last=True,
+            worker_init_fn=_worker_init_fn)
         self.val_iter = iter(self.val_loader)
 
         self.writers = {}
@@ -283,6 +305,8 @@ class Trainer:
                             "train/uncert_HiS_mean": float(losses["uncert_HiS_mean"].cpu().item()),
                             "train/uncert_MiS_mean": float(losses["uncert_MiS_mean"].cpu().item()),
                             "train/uncert_LoS_mean": float(losses["uncert_LoS_mean"].cpu().item()),
+                            "train/corrupt_head_acc": float(losses["corrupt_head_acc"].cpu().item())
+                                if "corrupt_head_acc" in losses else 0.0,
                             "train/lr": float(self.model_optimizer.state_dict()["param_groups"][0]["lr"]),
                             "train/samples_per_sec": float(self.opt.batch_size / duration),
                         },
@@ -325,13 +349,13 @@ class Trainer:
             # Otherwise, we only feed the image with frame_id 0 through the depth encoder   前端网络与后端网络连接的地方
             features_HiS = self.models["encoder"](inputs["color_HiS", 0, 0])
             #print("feature size", features_HiS.size())
-            outputs["out_HiS"] = self.models["depth"](features_HiS)
+            outputs["out_HiS"] = self.models["depth"](features_HiS, raw_image=inputs["color_HiS", 0, 0])
             # Otherwise, we only feed the image with frame_id 0 through the depth encoder
             features_MiS = self.models["encoder"](inputs["color_MiS_aug", 0, 0])
-            outputs["out_MiS"] = self.models["depth"](features_MiS)
+            outputs["out_MiS"] = self.models["depth"](features_MiS, raw_image=inputs["color_MiS_aug", 0, 0])
             # Otherwise, we only feed the image with frame_id 0 through the depth encoder
             features_LoS = self.models["encoder"](inputs["color_LoS", 0, 0])
-            outputs["out_LoS"] = self.models["depth"](features_LoS)
+            outputs["out_LoS"] = self.models["depth"](features_LoS, raw_image=inputs["color_LoS", 0, 0])
 
         if self.opt.predictive_mask:
             outputs["predictive_mask"] = self.models["predictive_mask"](features_MiS)
@@ -791,6 +815,20 @@ class Trainer:
                 loss_MiS += calib_w * F.mse_loss(sigma_MiS, calib_target_MiS)
                 loss_LoS += calib_w * F.mse_loss(sigma_LoS, calib_target_LoS)
 
+                # supervizare cap global de detectie a corupiei: eticheta RESTRANSA
+                # la ceata/ploaie/zapada (is_weather_corrupted), nu toate cele 7
+                # tipuri din use_corruption_aug. Blur/zgomot nu schimba statistici
+                # globale de culoare/contrast - un cap care le citeste nu le poate
+                # invata, si etichetarea lor ca "corupt" doar adauga zgomot
+                # contradictoriu in gradient (verificat empiric).
+                is_corrupted = inputs["is_weather_corrupted"].to(self.device).view(-1, 1)
+                corrupt_w = getattr(self.opt, "corrupt_head_weight", 1.0)
+                loss_HiS += corrupt_w * F.binary_cross_entropy_with_logits(
+                    outputs["out_HiS"][("corrupt_logit", 0)], is_corrupted)
+                losses["corrupt_head_acc"] = (
+                    (torch.sigmoid(outputs["out_HiS"][("corrupt_logit", 0)]) > 0.5).float()
+                    == is_corrupted).float().mean()
+
 
             # Lcs0
 
@@ -1120,7 +1158,8 @@ class Trainer:
             path = os.path.join(self.opt.load_weights_folder, "{}.pth".format(n))
             model_dict = self.models[n].state_dict()
             pretrained_dict = torch.load(path)
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+            pretrained_dict = {k: v for k, v in pretrained_dict.items()
+                                if k in model_dict and v.shape == model_dict[k].shape}
             model_dict.update(pretrained_dict)
             self.models[n].load_state_dict(model_dict)
 
@@ -1136,11 +1175,62 @@ class Trainer:
 
         # loading adam state
         optimizer_load_path = os.path.join(self.opt.load_weights_folder, "adam.pth")
-        if os.path.isfile(optimizer_load_path) and not getattr(self.opt, "reset_uncert_head", False):
-            print("Loading Adam weights")
-            optimizer_dict = torch.load(optimizer_load_path)
-            self.model_optimizer.load_state_dict(optimizer_dict)
+        adam_loaded = False
+        if os.path.isfile(optimizer_load_path):
+            try:
+                print("Loading Adam weights")
+                optimizer_dict = torch.load(optimizer_load_path)
+                self.model_optimizer.load_state_dict(optimizer_dict)
+                # load_state_dict nu valideaza shape-urile per-parametru (mapeaza
+                # state-ul pe pozitie, nu pe shape) - un mismatch (ex. corruption_head
+                # schimbat de la Linear(3,16) la Linear(6,16)) trece nedetectat aici
+                # si pica abia in optimizer.step() cu RuntimeError din torch._foreach_*.
+                # Verificam explicit shape-urile momentum/variance fata de parametri.
+                for group in self.model_optimizer.param_groups:
+                    for p in group["params"]:
+                        state = self.model_optimizer.state.get(p)
+                        if state and "exp_avg" in state and state["exp_avg"].shape != p.shape:
+                            raise ValueError(
+                                f"Adam state shape mismatch: {state['exp_avg'].shape} vs {p.shape}")
+                adam_loaded = True
+            except (ValueError, RuntimeError) as e:
+                # arhitectura curenta are parametri noi fata de checkpoint
+                # (ex. corruption_head) - starea Adam veche nu se mai potriveste
+                # structural. Continuam cu Adam initializat proaspat pentru toti.
+                print(f"Adam state mismatch (architecture changed), starting fresh: {e}")
+                corrupt_head_params = list(self.models["depth"].corruption_head.parameters())
+                corrupt_head_param_ids = {id(p) for p in corrupt_head_params}
+                main_params = [p for p in self.parameters_to_train if id(p) not in corrupt_head_param_ids]
+                corrupt_head_lr = getattr(self.opt, "corrupt_head_lr", self.opt.learning_rate)
+                self.model_optimizer = optim.Adam([
+                    {"params": main_params, "lr": self.opt.learning_rate},
+                    {"params": corrupt_head_params, "lr": corrupt_head_lr},
+                ])
+        if adam_loaded:
+            # load_state_dict suprascrie param_groups (inclusiv 'lr') cu valoarea
+            # din checkpoint, care e deja decazuta de scheduler-ul rularii vechi.
+            # Restauram lr-ul cerut explicit prin --learning_rate / --corrupt_head_lr,
+            # nu cel stale - grupul 1 (corruption_head) isi pastreaza lr-ul propriu,
+            # diferit de restul retelei.
+            corrupt_head_lr = getattr(self.opt, "corrupt_head_lr", self.opt.learning_rate)
+            for i, group in enumerate(self.model_optimizer.param_groups):
+                group["lr"] = corrupt_head_lr if i == 1 else self.opt.learning_rate
+            print(f"Restored lr to {self.opt.learning_rate} (main) / {corrupt_head_lr} (corrupt_head)")
+
+            if getattr(self.opt, "reset_uncert_head", False) and "depth" in self.models:
+                # Adam are deja momentum/variance bine calibrate pentru dispconv/encoder
+                # din checkpoint-ul convergent - le pastram. Resetam doar starea pentru
+                # uncertconv (ale carui greutati au fost reinitializate mai sus), ca sa
+                # nu transmitem momentum stale pentru parametri complet noi - acesta
+                # reset selectiv evita destabilizarea tranzitorie a depth-ului pe care
+                # un reset GLOBAL al lui Adam o cauza (toate epocile 0-8 din Fix4).
+                uncertconv = self.models["depth"].convs[("uncertconv", 0)].conv
+                n_reset = 0
+                for p in uncertconv.parameters():
+                    if p in self.model_optimizer.state:
+                        del self.model_optimizer.state[p]
+                        n_reset += 1
+                print(f"Reset Adam state for {n_reset} uncertconv tensors "
+                      "(rest of model keeps loaded Adam momentum)")
         else:
-            print("Adam is randomly initialized "
-                  "({})".format("reset_uncert_head" if getattr(self.opt, "reset_uncert_head", False)
-                                 else "no checkpoint found"))
+            print("Adam is randomly initialized (no checkpoint found or architecture mismatch)")

@@ -136,7 +136,8 @@ def compute_photometric_loss(pred, target, ssim_fn):
 def tta_step(encoder, depth_decoder, pose_encoder, pose_decoder,
              frame_target, frame_prev, frame_next,
              K, inv_K, ssim_fn, backproject, project,
-             tta_lr, n_steps, device, consistency_weight=1.0):
+             tta_lr, n_steps, device, consistency_weight=1.0,
+             uncertainty_weighted=True):
     """
     Photometric TTA cu vreme consistenta pe toate frame-urile.
 
@@ -166,6 +167,14 @@ def tta_step(encoder, depth_decoder, pose_encoder, pose_decoder,
         disp = output[("disp", 0)][:, 0:1]
         _, depth = disp_to_depth(disp, 0.1, 100.0)
 
+        # incertitudine-ghidata: pixelii pe care modelul ii considera nesiguri
+        # (sigma mare) conteaza mai puin in adaptare - semnalul fotometric de
+        # acolo e oricum mai putin de incredere (texturare slaba, ocluzii,
+        # zone deja afectate de vreme). Detached: foloseste sigma ca pondere
+        # fixa per pas, nu lasa gradientul de TTA sa o re-calibreze.
+        sigma = (torch.sigmoid(output[("uncert", 0)]).detach()
+                 if uncertainty_weighted and ("uncert", 0) in output else None)
+
         # Pose prediction (frozen)
         with torch.no_grad():
             pose_in_prev = torch.cat([frame_prev, frame_target], dim=1)
@@ -187,7 +196,12 @@ def tta_step(encoder, depth_decoder, pose_encoder, pose_decoder,
                 src, pix_coords,
                 mode="bilinear", padding_mode="border", align_corners=False)
             photo_loss = compute_photometric_loss(reconstructed, frame_target, ssim_fn)
-            total_photo = total_photo + photo_loss.mean()
+            if sigma is not None:
+                weight = (1.0 - sigma)
+                weighted_loss = (photo_loss * weight).sum() / weight.sum().clamp(min=1e-6)
+                total_photo = total_photo + weighted_loss
+            else:
+                total_photo = total_photo + photo_loss.mean()
 
         # Consistency: prevent depth from drifting too far from initial prediction
         consist_loss = F.l1_loss(disp, disp_init)
@@ -358,7 +372,8 @@ def evaluate(opt):
                     frame_target, frame_prev, frame_next,
                     K, inv_K, ssim_fn, backproject, project,
                     tta_lr=opt.tta_lr, n_steps=opt.tta_steps, device=device,
-                    consistency_weight=getattr(opt, "tta_consistency_weight", 1.0))
+                    consistency_weight=getattr(opt, "tta_consistency_weight", 1.0),
+                    uncertainty_weighted=not getattr(opt, "tta_no_uncertainty_weight", False))
             else:
                 depth_decoder.eval()
                 with torch.no_grad():
@@ -494,6 +509,8 @@ if __name__ == "__main__":
                                 help="learning rate TTA")
     options.parser.add_argument("--tta_consistency_weight", type=float, default=1.0,
                                 help="weight pentru consistency loss in TTA")
+    options.parser.add_argument("--tta_no_uncertainty_weight", action="store_true",
+                                help="dezactiveaza ponderarea TTA cu (1-sigma), pentru comparatie A/B")
     options.parser.add_argument("--flip_ensemble", action="store_true",
                                 help="TTA simplu: medie cu predictia imaginii orizontal-flipped")
     evaluate(options.parse())

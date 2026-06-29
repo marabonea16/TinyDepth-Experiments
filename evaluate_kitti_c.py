@@ -106,7 +106,7 @@ def evaluate_one(encoder, decoder, data_path, device, height=192, width=640, bat
     with torch.no_grad():
         for data in loader:
             inp = data[("color_MiS", 0, 0)].to(device)
-            out = decoder(encoder(inp))
+            out = decoder(encoder(inp), raw_image=inp)
             pred_disp, _ = disp_to_depth(
                 out[("disp", 0)][:, 0, :, :].unsqueeze(1), 0.1, 100.0
             )

@@ -7,11 +7,21 @@
 
 from __future__ import absolute_import, division, print_function
 
+import random
+import numpy as np
+import torch
+
 from trainer import Trainer
 from options import MonodepthOptions
 
 options = MonodepthOptions()
 opts = options.parse()
+
+SEED = getattr(opts, "seed", 42)
+random.seed(SEED)
+np.random.seed(SEED)
+torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
 
 
 if __name__ == "__main__":
