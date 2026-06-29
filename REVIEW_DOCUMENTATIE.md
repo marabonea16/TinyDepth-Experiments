@@ -50,11 +50,11 @@ Nu pot să-ți spun "pune valoarea X" aici, pentru că nu știu ce checkpoint a 
 
 | Model | AbsRel curat↓ | AbsRel KITTI-C↓ |
 |---|---|---|
-| URW-Depth (S1, fără augmentare vreme, sigma calibrată) | 0,097 | 0,206–0,216 |
-| URW-Depth-Weather (S1+S2, cu augmentare vreme, suprimare activă) | 0,112 | 0,156 |
+| URW-Depth (S2-Calibrare, fără augmentare vreme, fără suprimare activă) | 0,097 | 0,206–0,216 |
+| URW-Depth-Weather (S2-Calibrare+Vreme, suprimare activă) | 0,112 | 0,156 |
 
 și adaugă în text (de exemplu la finalul secțiunii 4.2.1):
-> "Modelul de bază, URW-Depth, este obținut la finalul etapei S1 (secțiunea 3.7) și este optimizat pentru acuratețe maximă pe date curate. Varianta URW-Depth-Weather continuă antrenarea prin etapa S2, tranzacționând 15% din acuratețea pe curat pentru o reducere de 27% a erorii pe KITTI-C. Ambele variante au incertitudinea calibrată corect (secțiunea 3.3.2); diferența dintre ele este exclusiv etapa de antrenare la care se oprește fine-tuning-ul."
+> "Pornind de la același punct de control rezultat din etapa S1 (în care capul de incertitudine nu este încă supus calibrării explicite — secțiunea 3.3.2), se execută două rulări separate ale etapei S2: una fără augmentare meteorologică și fără suprimare a caracteristicilor activată, rezultând modelul URW-Depth, optimizat pentru acuratețe maximă pe date curate; și una cu augmentare meteorologică și suprimare ghidată de incertitudine activată, rezultând URW-Depth-Weather, care tranzacționează 15% din acuratețea pe curat pentru o reducere de 27% a erorii pe KITTI-C. Ambele variante au incertitudinea calibrată corect (secțiunea 3.3.2); diferența dintre ele este exclusiv configurația folosită în etapa S2."
 
 ---
 
@@ -109,10 +109,10 @@ Dacă confirmi maparea, rulez evaluările (clean + protocol vreme + KITTI-C, cu 
 **CE GĂSEȘTI ACUM** (ultima frază din 3.7, pag. 53):
 > "Această separare clarifică totodată atribuirea în experimentele din capitolul 4, unde variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, automascarea, suprimarea de caracteristici) independent de strategia de augmentare, în timp ce modelul complet antrenat și cu etapa a doua reflectă capacitatea de adaptare la condiții meterologice nefavorabile."
 
-**CE PUI ÎN LOC** (ultima frază înlocuită cu două fraze, plus o propoziție introductivă nouă):
-> "Această separare clarifică totodată atribuirea în experimentele din capitolul 4, unde variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, calibrarea, suprimarea de caracteristici) independent de strategia de augmentare. Mai mult, cele două etape de antrenare produc direct cele două variante finale ale modelului propus: **URW-Depth**, rezultat la finalul etapei S1, optimizat pentru acuratețe maximă pe date curate, cu incertitudinea calibrată dar fără suprimare a caracteristicilor angajată activ; și **URW-Depth-Weather**, rezultat prin continuarea fine-tuning-ului prin etapa S2, care activează suprimarea ghidată de incertitudine pe lângă augmentările de vreme și degradări vizuale, tranzacționând o parte din acuratețea pe date curate pentru o robustețe semnificativ crescută la condiții meteorologice nefavorabile și degradări sintetice (secțiunea 4.2)."
+**CE PUI ÎN LOC** (ultima frază înlocuită cu un paragraf nou):
+> "Această separare clarifică totodată atribuirea în experimentele din capitolul 4, unde variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, calibrarea, suprimarea de caracteristici) independent de strategia de augmentare. Etapa S1 produce un punct de control intermediar la care capul de incertitudine nu este încă supus calibrării explicite, fiind predispus colapsului descris în secțiunea 3.3.2. Pornind de la acest punct de control, etapa S2 este rulată în **două configurații separate**, producând cele două variante finale ale modelului propus: **URW-Depth**, calibrat (secțiunea 3.3.2) fără augmentare meteorologică și fără suprimarea caracteristicilor activată în timpul antrenării, optimizat pentru acuratețe maximă pe date curate; și **URW-Depth-Weather**, calibrat cu augmentare meteorologică și suprimare ghidată de incertitudine activată, care tranzacționează o parte din acuratețea pe date curate pentru o robustețe semnificativ crescută la condiții meteorologice nefavorabile și degradări sintetice (secțiunea 4.2)."
 
-*(Motiv: cele două etape S1/S2 deja existau în structura ta — singura modificare e să numești explicit ce produce fiecare etapă, în loc de a le prezenta ca pași intermediari către un singur model final "URW-Depth".)*
+*(Motiv: corectare — sigma e colapsată la finalul lui S1, nu calibrată; cele două modele finale vin din două rulări DIFERITE ale etapei S2 pornind de la același punct de control S1, nu din "S1" vs "S1 continuat cu S2".)*
 
 ---
 
