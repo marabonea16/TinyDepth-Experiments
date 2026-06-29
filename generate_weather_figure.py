@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from datasets.mono_dataset import (
     apply_fog, apply_rain, apply_snow,
     apply_contrast, apply_brightness_shift, apply_frost_like,
+    apply_defocus_blur, apply_motion_blur, apply_gaussian_noise,
+    apply_shot_noise, apply_jpeg_compression,
 )
 
 SAMPLE_IMG = "kitti_c/kitti_c/clean/kitti_data/2011_09_26/2011_09_26_drive_0009_sync/image_02/data/0000000000.png"
@@ -26,13 +28,21 @@ OUT_DIR = "weather_figures"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 SEVERITIES = [0.0, 0.25, 0.45, 0.65, 0.85]
-ROWS = [
+ROWS_METEO = [
     ("Ceata", apply_fog),
     ("Ploaie", apply_rain),
     ("Zapada", apply_snow),
     ("Contrast redus", apply_contrast),
     ("Luminozitate crescuta", apply_brightness_shift),
     ("Inghet (frost)", apply_frost_like),
+]
+
+ROWS_VIZUALE = [
+    ("Defocus blur", apply_defocus_blur),
+    ("Motion blur", apply_motion_blur),
+    ("Zgomot gaussian", apply_gaussian_noise),
+    ("Shot noise", apply_shot_noise),
+    ("Compresie JPEG", apply_jpeg_compression),
 ]
 
 LABEL_W = 340       # latime banda de eticheta randuri (stanga)
@@ -50,12 +60,11 @@ def get_font(size):
     return ImageFont.load_default()
 
 
-def main():
-    img = Image.open(SAMPLE_IMG).convert("RGB")
+def build_table(img, rows, out_name):
     w, h = img.size
     font = get_font(FONT_SIZE)
 
-    n_rows, n_cols = len(ROWS), len(SEVERITIES)
+    n_rows, n_cols = len(rows), len(SEVERITIES)
     canvas_w = LABEL_W + n_cols * w
     canvas_h = HEADER_H + n_rows * h
     canvas = Image.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
@@ -68,7 +77,7 @@ def main():
         draw.text((x, HEADER_H // 2), label, fill=(0, 0, 0), font=font, anchor="mm")
 
     # randuri: imagine + eticheta nume degradare
-    for i, (name, fn) in enumerate(ROWS):
+    for i, (name, fn) in enumerate(rows):
         y = HEADER_H + i * h
         draw.text((LABEL_W // 2, y + h // 2), name, fill=(0, 0, 0), font=font, anchor="mm")
         for j, sev in enumerate(SEVERITIES):
@@ -76,9 +85,15 @@ def main():
             x = LABEL_W + j * w
             canvas.paste(out_img, (x, y))
 
-    out_path = os.path.join(OUT_DIR, "tabel_augmentari.png")
+    out_path = os.path.join(OUT_DIR, out_name)
     canvas.save(out_path)
     print(f"-> tabel salvat: {out_path} ({canvas_w}x{canvas_h})")
+
+
+def main():
+    img = Image.open(SAMPLE_IMG).convert("RGB")
+    build_table(img, ROWS_METEO, "tabel_augmentari.png")
+    build_table(img, ROWS_VIZUALE, "tabel_degradari_vizuale.png")
 
 
 if __name__ == "__main__":

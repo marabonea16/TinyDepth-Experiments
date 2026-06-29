@@ -90,20 +90,26 @@ def apply_snow(img, severity=None):
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
-def apply_defocus_blur(img):
+def apply_defocus_blur(img, severity=None):
     """Blur de defocus: gaussian cu kernel mare."""
     import cv2
-    severity = random.uniform(0.5, 2.5)
+    if severity is None:
+        severity = random.uniform(0.5, 2.5)
+    else:
+        severity = 0.5 + severity * 2.0  # mapeaza [0,1] -> [0.5, 2.5]
     ksize = int(severity * 4) * 2 + 1  # odd kernel
     arr = np.array(img, dtype=np.uint8)
     arr = cv2.GaussianBlur(arr, (ksize, ksize), severity)
     return Image.fromarray(arr)
 
 
-def apply_motion_blur(img):
+def apply_motion_blur(img, severity=None):
     """Motion blur liniar in directie aleatoare."""
     import cv2
-    length = random.randint(5, 20)
+    if severity is None:
+        length = random.randint(5, 20)
+    else:
+        length = max(3, int(5 + severity * 15))  # mapeaza [0,1] -> [5, 20]
     angle = random.uniform(0, 360)
     arr = np.array(img, dtype=np.uint8)
     # kernel liniar rotit
@@ -117,21 +123,39 @@ def apply_motion_blur(img):
     return Image.fromarray(arr)
 
 
-def apply_gaussian_noise(img):
+def apply_gaussian_noise(img, severity=None):
     """Zgomot gaussian aditiv."""
-    sigma = random.uniform(5, 30)
+    if severity is None:
+        sigma = random.uniform(5, 30)
+    else:
+        sigma = 5 + severity * 25  # mapeaza [0,1] -> [5, 30]
     arr = np.array(img, dtype=np.float32)
     noise = np.random.normal(0, sigma, arr.shape).astype(np.float32)
     arr = arr + noise
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
-def apply_shot_noise(img):
+def apply_shot_noise(img, severity=None):
     """Shot noise (Poisson)."""
-    scale = random.uniform(0.02, 0.15)
+    if severity is None:
+        scale = random.uniform(0.02, 0.15)
+    else:
+        scale = 0.02 + severity * 0.13  # mapeaza [0,1] -> [0.02, 0.15]
     arr = np.array(img, dtype=np.float32) / 255.0
     arr = np.random.poisson(arr / scale) * scale
     return Image.fromarray(np.clip(arr * 255, 0, 255).astype(np.uint8))
+
+
+def apply_jpeg_compression(img, severity=None):
+    """Artefacte de compresie JPEG, prin re-codificare cu calitate redusa."""
+    import cv2
+    if severity is None:
+        severity = random.uniform(0.2, 0.9)
+    quality = int(90 - severity * 80)  # mapeaza [0,1] -> calitate [90,10]
+    arr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    ok, enc = cv2.imencode(".jpg", arr, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    dec = cv2.imdecode(enc, cv2.IMREAD_COLOR)
+    return Image.fromarray(cv2.cvtColor(dec, cv2.COLOR_BGR2RGB))
 
 
 def apply_contrast(img, severity=None):

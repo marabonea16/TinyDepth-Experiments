@@ -116,6 +116,19 @@ Dacă confirmi maparea, rulez evaluările (clean + protocol vreme + KITTI-C, cu 
 
 ---
 
+## 7b. Secțiunea 3.5.2, pag. 51 — compresia JPEG menționată în text nu exista în cod
+
+**CE GĂSEȘTI ACUM**:
+> "Augmentările de degradări vizuale includ pe lângă cele de ploaie, ceață și ninsoare, folosite ca și augmentări meteorologice, și degradări de neclaritate cauzate de mișcare, de zgomot gaussian și de compresie JPEG de diferite severități, similare cu cele utilizate în seturile de date KITTI-C și RoboDepth."
+
+**🔴 ROȘU — de verificat/corectat**: funcția de compresie JPEG **nu exista deloc** în `datasets/mono_dataset.py` înainte de azi — am adăugat-o (`apply_jpeg_compression`), dar **nu e încă inclusă în pool-ul activ de antrenare** (`use_corruption_aug`, care are 10 tipuri: fog/rain/snow/contrast/brightness/frost/defocus_blur/motion_blur/gaussian_noise/shot_noise — fără JPEG). Două opțiuni:
+1. Elimini mențiunea "compresie JPEG" din 3.5.2 (dacă niciun model evaluat nu a fost antrenat de fapt cu ea), sau
+2. Adaugi efectiv `apply_jpeg_compression` în pool-ul de antrenare și reantrenezi — costisitor de timp, nu recomand sub presiune de termen.
+
+**🟢 Figură nouă generată** (`weather_figures/tabel_degradari_vizuale.png`): tabel cu cele 5 degradări vizuale (defocus blur, motion blur, zgomot gaussian, shot noise, compresie JPEG) × 5 severități, în același format ca tabelul meteorologic (`weather_figures/tabel_augmentari.png`), pentru figura corespunzătoare secțiunii 3.5.2.
+
+---
+
 ## 8. Secțiunea 3.7, pag. 53 — etapa S2 este configurabilă și rulată de două ori
 
 **CE GĂSEȘTI ACUM** (al treilea și al patrulea paragraf din 3.7, pag. 53 — de la "Etapa a doua (S2) este dedicată..." până la final):
