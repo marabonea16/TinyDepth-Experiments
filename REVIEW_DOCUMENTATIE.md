@@ -50,11 +50,11 @@ Nu pot să-ți spun "pune valoarea X" aici, pentru că nu știu ce checkpoint a 
 
 | Model | AbsRel curat↓ | AbsRel KITTI-C↓ |
 |---|---|---|
-| URW-Depth-Clean (fără augmentare vreme, sigma calibrată) | 0,097 | 0,206–0,216 |
-| URW-Depth-Robust (cu augmentare vreme, suprimare activă) | 0,112 | 0,156 |
+| URW-Depth (S1, fără augmentare vreme, sigma calibrată) | 0,097 | 0,206–0,216 |
+| URW-Depth-Weather (S1+S2, cu augmentare vreme, suprimare activă) | 0,112 | 0,156 |
 
 și adaugă în text (de exemplu la finalul secțiunii 4.2.1):
-> "Modelul URW-Depth este oferit în două variante, controlate de un singur hiperparametru de antrenare ($w_{calib}$ și activarea gating-ului de suprimare): URW-Depth-Clean, optimizat pentru acuratețe maximă pe date curate, și URW-Depth-Robust, care tranzacționează 15% din acuratețea pe curat pentru o reducere de 27% a erorii pe KITTI-C. Ambele variante au incertitudinea calibrată corect (secțiunea 3.3.2); diferența dintre ele este exclusiv dacă suprimarea ghidată de incertitudine este activată în timpul antrenării."
+> "Modelul de bază, URW-Depth, este obținut la finalul etapei S1 (secțiunea 3.7) și este optimizat pentru acuratețe maximă pe date curate. Varianta URW-Depth-Weather continuă antrenarea prin etapa S2, tranzacționând 15% din acuratețea pe curat pentru o reducere de 27% a erorii pe KITTI-C. Ambele variante au incertitudinea calibrată corect (secțiunea 3.3.2); diferența dintre ele este exclusiv etapa de antrenare la care se oprește fine-tuning-ul."
 
 ---
 
@@ -104,7 +104,19 @@ Dacă confirmi maparea, rulez evaluările (clean + protocol vreme + KITTI-C, cu 
 
 ---
 
-## 8. Declarația de autenticitate (ultima pagină) — de completat manual
+## 8. Secțiunea 3.7, pag. 53 — strategia de antrenare în doi pași = cele două modele finale
+
+**CE GĂSEȘTI ACUM** (ultima frază din 3.7, pag. 53):
+> "Această separare clarifică totodată atribuirea în experimentele din capitolul 4, unde variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, automascarea, suprimarea de caracteristici) independent de strategia de augmentare, în timp ce modelul complet antrenat și cu etapa a doua reflectă capacitatea de adaptare la condiții meterologice nefavorabile."
+
+**CE PUI ÎN LOC** (ultima frază înlocuită cu două fraze, plus o propoziție introductivă nouă):
+> "Această separare clarifică totodată atribuirea în experimentele din capitolul 4, unde variantele de model antrenate doar prin etapa întâi izolează efectul modificărilor arhitecturale (capul de incertitudine, calibrarea, suprimarea de caracteristici) independent de strategia de augmentare. Mai mult, cele două etape de antrenare produc direct cele două variante finale ale modelului propus: **URW-Depth**, rezultat la finalul etapei S1, optimizat pentru acuratețe maximă pe date curate, cu incertitudinea calibrată dar fără suprimare a caracteristicilor angajată activ; și **URW-Depth-Weather**, rezultat prin continuarea fine-tuning-ului prin etapa S2, care activează suprimarea ghidată de incertitudine pe lângă augmentările de vreme și degradări vizuale, tranzacționând o parte din acuratețea pe date curate pentru o robustețe semnificativ crescută la condiții meteorologice nefavorabile și degradări sintetice (secțiunea 4.2)."
+
+*(Motiv: cele două etape S1/S2 deja existau în structura ta — singura modificare e să numești explicit ce produce fiecare etapă, în loc de a le prezenta ca pași intermediari către un singur model final "URW-Depth".)*
+
+---
+
+## 9. Declarația de autenticitate (ultima pagină) — de completat manual
 
 **CE COMPLETEZI** la rândul "În elaborarea lucrării":
 > bifează **"am utilizat"**, denumire: **Claude (Anthropic)**, sursa: **Claude Code / API Anthropic**.
