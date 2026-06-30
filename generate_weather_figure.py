@@ -29,17 +29,17 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 SEVERITIES = [0.0, 0.25, 0.45, 0.65, 0.85]
 ROWS_METEO = [
-    ("Ceata", apply_fog),
+    ("Ceață", apply_fog),
     ("Ploaie", apply_rain),
-    ("Zapada", apply_snow),
+    ("Zăpadă", apply_snow),
     ("Contrast redus", apply_contrast),
-    ("Luminozitate crescuta", apply_brightness_shift),
-    ("Inghet (frost)", apply_frost_like),
+    ("Luminozitate crescută", apply_brightness_shift),
+    ("Îngheț (frost)", apply_frost_like),
 ]
 
 ROWS_VIZUALE = [
     ("Neclaritate la defocalizare", apply_defocus_blur),
-    ("Neclaritate la miscare", apply_motion_blur),
+    ("Neclaritate la mișcare", apply_motion_blur),
     ("Zgomot gaussian", apply_gaussian_noise),
     ("Zgomot de shot", apply_shot_noise),
     ("Compresie jpeg", apply_jpeg_compression),
