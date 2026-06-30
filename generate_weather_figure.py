@@ -38,11 +38,11 @@ ROWS_METEO = [
 ]
 
 ROWS_VIZUALE = [
-    ("Defocus blur", apply_defocus_blur),
-    ("Motion blur", apply_motion_blur),
+    ("Neclaritate la defocalizare", apply_defocus_blur),
+    ("Neclaritate la miscare", apply_motion_blur),
     ("Zgomot gaussian", apply_gaussian_noise),
-    ("Shot noise", apply_shot_noise),
-    ("Compresie JPEG", apply_jpeg_compression),
+    ("Zgomot de shot", apply_shot_noise),
+    ("Compresie jpeg", apply_jpeg_compression),
 ]
 
 LABEL_W = 340       # latime banda de eticheta randuri (stanga)
